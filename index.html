@@ -938,7 +938,7 @@ If no card at all: {"found": false, "reason": "..."}`;
   const USER_TEXT = `Identify this Pokémon card from the image. Read the name, HP, card number and set directly from the card. Then search the web for its current market price and use those real prices in estimatedValue. Return only the JSON.`;
 
   try {
-    const response = await fetch('/analyze', {
+    const response = await fetch('https://pokelens.onrender.com/analyze', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
