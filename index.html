@@ -1,406 +1,107 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 <script>
-// ─────────────────────────────────────────────
-// STATE
-// ─────────────────────────────────────────────
-
 const root = document.getElementById('root');
+const collectionRoot = document.getElementById('collection-root');
 
-let state = {
-  mode: 'idle',
-  imageSrc: null,
-  result: null,
-  error: null
-};
+let collection =
+  JSON.parse(localStorage.getItem('pokelens_collection') || '[]');
 
-let stream = null;
+let portfolioHistory =
+  JSON.parse(localStorage.getItem('pokelens_portfolio_history') || '[]');
 
-let collection = JSON.parse(
-  localStorage.getItem('pokelens_collection') || '[]'
-);
-
-let portfolioHistory = JSON.parse(
-  localStorage.getItem('pokelens_portfolio_history') || '[]'
-);
-
-// ─────────────────────────────────────────────
-// APP START
-// ─────────────────────────────────────────────
-
-updateCollectionCount();
-render();
-
-// ─────────────────────────────────────────────
-// MAIN RENDER
-// ─────────────────────────────────────────────
-
-function render() {
-
-  const { mode } = state;
-
-  if (mode === 'idle') {
-    renderIdle();
-  }
-
-  if (mode === 'preview') {
-    renderPreview();
-  }
-
-  if (mode === 'loading') {
-    renderLoading();
-  }
-
-  if (mode === 'result') {
-    renderResult();
-  }
-
-  if (mode === 'error') {
-    renderError();
-  }
-}
-
-// ─────────────────────────────────────────────
-// IDLE
-// ─────────────────────────────────────────────
-
-function renderIdle() {
-
-  root.innerHTML = `
-    <div class="panel">
-
-      <input
-        type="file"
-        id="fileInput"
-        accept="image/*"
-        style="display:none"
-      >
-
-      <button class="btn btn-primary" onclick="document.getElementById('fileInput').click()">
-        Upload Card
-      </button>
-
-      <div style="height:12px"></div>
-
-      <button class="btn btn-secondary" onclick="startCamera()">
-        Use Camera
-      </button>
-
-    </div>
-  `;
-
-  document.getElementById('fileInput').onchange = e => {
-
-    const file = e.target.files[0];
-
-    if (!file) return;
-
-    const reader = new FileReader();
-
-    reader.onload = ev => {
-
-      state.imageSrc = ev.target.result;
-      state.mode = 'preview';
-
-      render();
-    };
-
-    reader.readAsDataURL(file);
-  };
-}
-
-// ─────────────────────────────────────────────
-// CAMERA
-// ─────────────────────────────────────────────
-
-async function startCamera() {
-
-  try {
-
-    stream = await navigator.mediaDevices.getUserMedia({
-      video: {
-        facingMode: 'environment'
-      }
-    });
-
-    root.innerHTML = `
-      <div class="panel">
-
-        <video
-          id="video"
-          autoplay
-          playsinline
-          style="width:100%;border-radius:12px"
-        ></video>
-
-        <div style="height:12px"></div>
-
-        <button class="btn btn-primary" onclick="capturePhoto()">
-          Capture
-        </button>
-
-      </div>
-    `;
-
-    document.getElementById('video').srcObject = stream;
-
-  } catch (err) {
-
-    state.mode = 'error';
-    state.error = 'Camera access denied';
-
-    render();
-  }
-}
-
-function capturePhoto() {
-
-  const video = document.getElementById('video');
-
-  const canvas = document.createElement('canvas');
-
-  canvas.width = video.videoWidth;
-  canvas.height = video.videoHeight;
-
-  const ctx = canvas.getContext('2d');
-
-  ctx.drawImage(video, 0, 0);
-
-  state.imageSrc = canvas.toDataURL('image/jpeg');
-
-  stream.getTracks().forEach(t => t.stop());
-
-  state.mode = 'preview';
-
-  render();
-}
-
-// ─────────────────────────────────────────────
-// PREVIEW
-// ─────────────────────────────────────────────
-
-function renderPreview() {
-
-  root.innerHTML = `
-    <div class="panel">
-
-      <img
-        src="${state.imageSrc}"
-        style="width:100%;border-radius:12px"
-      >
-
-      <div style="height:12px"></div>
-
-      <button class="btn btn-primary" onclick="analyzeCard()">
-        Analyze Card
-      </button>
-
-      <div style="height:12px"></div>
-
-      <button class="btn btn-secondary" onclick="resetApp()">
-        Cancel
-      </button>
-
-    </div>
-  `;
-}
-
-// ─────────────────────────────────────────────
-// LOADING
-// ─────────────────────────────────────────────
-
-function renderLoading() {
-
-  root.innerHTML = `
-    <div class="panel">
-      <div style="text-align:center;padding:40px">
-        Analyzing card...
-      </div>
-    </div>
-  `;
-}
-
-// ─────────────────────────────────────────────
-// ERROR
-// ─────────────────────────────────────────────
-
-function renderError() {
-
-  root.innerHTML = `
-    <div class="panel">
-
-      <div style="color:#ff6b6b">
-        ${state.error}
-      </div>
-
-      <div style="height:12px"></div>
-
-      <button class="btn btn-primary" onclick="resetApp()">
-        Back
-      </button>
-
-    </div>
-  `;
-}
-
-// ─────────────────────────────────────────────
-// ANALYZE
-// ─────────────────────────────────────────────
-
-async function analyzeCard() {
-
-  state.mode = 'loading';
-
-  render();
-
-  try {
-
-    const response = await fetch(
-      'https://pokelens.onrender.com/analyze',
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          image: state.imageSrc
-        })
-      }
-    );
-
-    const data = await response.json();
-
-    state.result = data;
-
-    state.mode = 'result';
-
-    render();
-
-  } catch (err) {
-
-    state.error = err.message;
-
-    state.mode = 'error';
-
-    render();
-  }
-}
-
-// ─────────────────────────────────────────────
-// RESULT
-// ─────────────────────────────────────────────
-
-function renderResult() {
-
-  const r = state.result;
-
-  root.innerHTML = `
-    <div class="panel">
-
-      <img
-        src="${state.imageSrc}"
-        style="width:100%;border-radius:12px;margin-bottom:16px"
-      >
-
-      <div class="card-name">
-        ${r.name || 'Unknown Card'}
-      </div>
-
-      <div class="card-meta">
-        ${r.set || ''}
-      </div>
-
-      <div style="height:16px"></div>
-
-      <div class="value-grid">
-
-        <div class="value-cell">
-          <div class="value-cell-label">Low</div>
-          <div class="value-cell-num">
-            $${Number(r.estimatedValue?.low || 0).toFixed(2)}
-          </div>
-        </div>
-
-        <div class="value-cell">
-          <div class="value-cell-label">Mid</div>
-          <div class="value-cell-num">
-            $${Number(r.estimatedValue?.mid || 0).toFixed(2)}
-          </div>
-        </div>
-
-        <div class="value-cell">
-          <div class="value-cell-label">High</div>
-          <div class="value-cell-num">
-            $${Number(r.estimatedValue?.high || 0).toFixed(2)}
-          </div>
-        </div>
-
-      </div>
-
-      <div style="height:16px"></div>
-
-      <button class="btn btn-primary" onclick="saveToCollection()">
-        Save To Collection
-      </button>
-
-      <div style="height:12px"></div>
-
-      <button class="btn btn-secondary" onclick="resetApp()">
-        Scan Another
-      </button>
-
-    </div>
-  `;
-}
-
-// ─────────────────────────────────────────────
-// SAVE COLLECTION
-// ─────────────────────────────────────────────
-
-function saveToCollection() {
-
-  const r = state.result;
-
-  const value = Number(r.estimatedValue?.mid || 0);
-
-  collection.unshift({
-    id: Date.now(),
-    name: r.name,
-    set: r.set,
-    value,
-    customValue: value,
-    customGrade: r.grade || 'Near Mint',
-    thumb: state.imageSrc,
-    addedAt: new Date().toLocaleDateString(),
-    priceHistory: [
-      {
-        date: new Date().toLocaleDateString(),
-        value
-      }
-    ]
-  });
-
+function saveCollection() {
   localStorage.setItem(
     'pokelens_collection',
     JSON.stringify(collection)
   );
 
-  updatePortfolioHistory();
-
   updateCollectionCount();
-
-  alert('Saved to collection!');
 }
 
-// ─────────────────────────────────────────────
-// PORTFOLIO HISTORY
-// ─────────────────────────────────────────────
+function updateCollectionCount() {
+  const el = document.getElementById('collection-count');
+
+  if (el) {
+    el.textContent =
+      collection.length > 0
+        ? `(${collection.length})`
+        : '';
+  }
+}
+
+function switchTab(tab) {
+  const scanner = document.getElementById('root');
+  const coll = document.getElementById('collection-root');
+
+  const tabS = document.getElementById('tab-scanner');
+  const tabC = document.getElementById('tab-collection');
+
+  if (tab === 'scanner') {
+    scanner.style.display = '';
+    coll.style.display = 'none';
+
+    tabS.classList.add('active');
+    tabC.classList.remove('active');
+  } else {
+    scanner.style.display = 'none';
+    coll.style.display = '';
+
+    tabS.classList.remove('active');
+    tabC.classList.add('active');
+
+    renderCollection();
+  }
+}
+
+function saveToCollection(card, img) {
+  const value =
+    Number(card.estimatedValue?.mid || 0);
+
+  const item = {
+    id: Date.now(),
+    name: card.name,
+    set: card.set,
+    setNumber: card.setNumber,
+    rarity: card.rarity,
+    grade: card.grade,
+    customGrade: card.grade,
+    value: value,
+    customValue: value,
+    valueLow: Number(card.estimatedValue?.low || 0),
+    valueHigh: Number(card.estimatedValue?.high || 0),
+    thumb: img,
+    notes: '',
+    addedAt: new Date().toLocaleDateString(),
+    priceHistory: [
+      {
+        date: new Date().toLocaleDateString(),
+        value: value
+      }
+    ]
+  };
+
+  collection.unshift(item);
+
+  updatePortfolioHistory();
+
+  saveCollection();
+}
+
+function removeFromCollection(id) {
+  collection =
+    collection.filter(c => c.id !== id);
+
+  saveCollection();
+
+  renderCollection();
+}
 
 function updatePortfolioHistory() {
-
-  const total = collection.reduce((sum, c) => {
-    return sum + Number(c.customValue || 0);
-  }, 0);
+  const total =
+    collection.reduce((sum, c) => {
+      return sum + Number(c.customValue || 0);
+    }, 0);
 
   portfolioHistory.push({
     date: new Date().toLocaleDateString(),
@@ -417,50 +118,17 @@ function updatePortfolioHistory() {
   );
 }
 
-// ─────────────────────────────────────────────
-// COLLECTION TAB
-// ─────────────────────────────────────────────
-
-function switchTab(tab) {
-
-  const scanner = document.getElementById('root');
-  const collectionRoot = document.getElementById('collection-root');
-
-  if (tab === 'scanner') {
-
-    scanner.style.display = '';
-    collectionRoot.style.display = 'none';
-
-    document.getElementById('tab-scanner').classList.add('active');
-    document.getElementById('tab-collection').classList.remove('active');
-
-  } else {
-
-    scanner.style.display = 'none';
-    collectionRoot.style.display = '';
-
-    document.getElementById('tab-scanner').classList.remove('active');
-    document.getElementById('tab-collection').classList.add('active');
-
-    renderCollection();
-  }
-}
-
-// ─────────────────────────────────────────────
-// COLLECTION RENDER
-// ─────────────────────────────────────────────
-
 function renderCollection() {
+  const total =
+    collection.reduce((sum, c) => {
+      return sum + Number(c.customValue || 0);
+    }, 0);
 
-  const el = document.getElementById('collection-root');
+  collectionRoot.innerHTML = `
 
-  const total = collection.reduce((sum, c) => {
-    return sum + Number(c.customValue || 0);
-  }, 0);
+  <div class="panel" style="margin-bottom:1rem">
 
-  el.innerHTML = `
     <div class="total-value-box">
-
       <div class="total-value-label">
         Total Collection Value
       </div>
@@ -468,188 +136,283 @@ function renderCollection() {
       <div class="total-value-num">
         $${total.toFixed(2)}
       </div>
-
     </div>
 
-    <div class="panel" style="margin-bottom:16px">
-
-      <div class="section-label">
-        Portfolio Analytics
-      </div>
-
-      <div style="height:280px">
-        <canvas id="valuePieChart"></canvas>
-      </div>
-
-      <div style="height:280px;margin-top:24px">
-        <canvas id="portfolioTrendChart"></canvas>
-      </div>
-
+    <div style="height:280px;margin-bottom:2rem">
+      <canvas id="pieChart"></canvas>
     </div>
 
-    <div class="collection-list">
+    <div style="height:280px">
+      <canvas id="lineChart"></canvas>
+    </div>
+
+  </div>
+
+  ${
+    collection.length === 0
+      ? `
+      <div class="empty-collection">
+        No cards saved yet.
+      </div>
+      `
+      : `
+      <div class="collection-list">
 
       ${collection.map(card => `
+
         <div
           class="collection-item"
           onclick="openCardDetails(${card.id})"
           style="cursor:pointer"
         >
 
-          <img
-            src="${card.thumb}"
-            class="collection-item-thumb"
-          >
+          ${
+            card.thumb
+              ? `<img
+                  src="${card.thumb}"
+                  class="collection-item-thumb"
+                >`
+              : ''
+          }
 
           <div class="collection-item-info">
-
             <div class="collection-item-name">
               ${card.name}
             </div>
 
             <div class="collection-item-meta">
-              ${card.set}
+              ${card.set} · ${card.customGrade}
             </div>
-
           </div>
 
           <div class="collection-item-value">
             $${Number(card.customValue).toFixed(2)}
           </div>
 
+          <button
+            class="collection-item-delete"
+            onclick="event.stopPropagation();removeFromCollection(${card.id})"
+          >
+            ✕
+          </button>
+
         </div>
+
       `).join('')}
 
-    </div>
+      </div>
+      `
+  }
+
   `;
 
   renderCharts();
 }
 
-// ─────────────────────────────────────────────
-// CHARTS
-// ─────────────────────────────────────────────
-
 function renderCharts() {
 
-  const pie = document.getElementById('valuePieChart');
+  const pieCanvas =
+    document.getElementById('pieChart');
 
-  if (pie) {
+  const lineCanvas =
+    document.getElementById('lineChart');
 
-    new Chart(pie, {
-      type: 'pie',
-      data: {
-        labels: collection.map(c => c.name),
-        datasets: [{
-          data: collection.map(c => c.customValue)
-        }]
+  if (!pieCanvas || !lineCanvas) return;
+
+  new Chart(pieCanvas, {
+    type: 'pie',
+
+    data: {
+      labels: collection.map(c => c.name),
+
+      datasets: [{
+        data: collection.map(c =>
+          Number(c.customValue || 0)
+        )
+      }]
+    },
+
+    options: {
+      responsive: true,
+
+      plugins: {
+        legend: {
+          labels: {
+            color: '#ffffff'
+          }
+        }
       }
-    });
-  }
+    }
+  });
 
-  const line = document.getElementById('portfolioTrendChart');
+  new Chart(lineCanvas, {
+    type: 'line',
 
-  if (line) {
+    data: {
+      labels: portfolioHistory.map(h => h.date),
 
-    new Chart(line, {
-      type: 'line',
-      data: {
-        labels: portfolioHistory.map(h => h.date),
-        datasets: [{
-          label: 'Portfolio Value',
-          data: portfolioHistory.map(h => h.value),
-          tension: 0.3
-        }]
+      datasets: [{
+        label: 'Collection Value',
+
+        data: portfolioHistory.map(h => h.value),
+
+        tension: 0.3
+      }]
+    },
+
+    options: {
+      responsive: true,
+
+      scales: {
+        x: {
+          ticks: {
+            color: '#ffffff'
+          }
+        },
+
+        y: {
+          ticks: {
+            color: '#ffffff'
+          }
+        }
+      },
+
+      plugins: {
+        legend: {
+          labels: {
+            color: '#ffffff'
+          }
+        }
       }
-    });
-  }
+    }
+  });
 }
-
-// ─────────────────────────────────────────────
-// CARD DETAILS
-// ─────────────────────────────────────────────
 
 function openCardDetails(id) {
 
-  const card = collection.find(c => c.id === id);
+  const card =
+    collection.find(c => c.id === id);
 
   if (!card) return;
 
-  closeCardDetails();
-
-  const modal = document.createElement('div');
+  const modal =
+    document.createElement('div');
 
   modal.id = 'card-detail-modal';
 
-  modal.style.cssText = `
+  modal.style = `
     position:fixed;
     inset:0;
-    background:rgba(0,0,0,.85);
+    background:rgba(0,0,0,0.85);
     z-index:9999;
     overflow:auto;
-    padding:20px;
+    padding:2rem;
   `;
 
   modal.innerHTML = `
-    <div class="panel" style="max-width:700px;margin:40px auto">
 
-      <div style="display:flex;justify-content:space-between">
+    <div
+      style="
+        max-width:700px;
+        margin:auto;
+        background:#111118;
+        border-radius:16px;
+        padding:24px;
+      "
+    >
 
-        <div>
-          <div class="card-name">${card.name}</div>
-          <div class="card-meta">${card.set}</div>
-        </div>
+      <div
+        style="
+          display:flex;
+          justify-content:space-between;
+          align-items:center;
+          margin-bottom:1rem;
+        "
+      >
 
-        <button class="btn btn-secondary" onclick="closeCardDetails()" style="width:auto">
-          Close
+        <h2>${card.name}</h2>
+
+        <button
+          onclick="closeCardDetails()"
+          style="
+            background:none;
+            border:none;
+            color:white;
+            font-size:24px;
+            cursor:pointer;
+          "
+        >
+          ✕
         </button>
 
       </div>
 
-      <div style="height:16px"></div>
+      ${
+        card.thumb
+          ? `
+          <img
+            src="${card.thumb}"
+            style="
+              width:220px;
+              border-radius:12px;
+              margin-bottom:1rem;
+            "
+          >
+          `
+          : ''
+      }
 
-      <img
-        src="${card.thumb}"
-        style="width:220px;border-radius:12px"
-      >
+      <div style="margin-bottom:1rem">
+        <label>Condition</label>
 
-      <div style="height:20px"></div>
-
-      <div class="section-label">
-        Condition
+        <select
+          id="edit-grade"
+          style="
+            width:100%;
+            padding:12px;
+            margin-top:6px;
+            border-radius:10px;
+            background:#1a1a24;
+            color:white;
+            border:1px solid rgba(255,255,255,0.1);
+          "
+        >
+          <option>Mint</option>
+          <option>Near Mint</option>
+          <option>Excellent</option>
+          <option>Good</option>
+          <option>Played</option>
+          <option>Poor</option>
+        </select>
       </div>
 
-      <select id="edit-grade" class="btn btn-secondary">
-        <option>Mint</option>
-        <option>Near Mint</option>
-        <option>Excellent</option>
-        <option>Good</option>
-        <option>Played</option>
-        <option>Poor</option>
-      </select>
+      <div style="margin-bottom:1rem">
+        <label>Manual Value</label>
 
-      <div style="height:16px"></div>
-
-      <div class="section-label">
-        Manual Value
+        <input
+          id="edit-value"
+          type="number"
+          value="${card.customValue}"
+          style="
+            width:100%;
+            padding:12px;
+            margin-top:6px;
+            border-radius:10px;
+            background:#1a1a24;
+            color:white;
+            border:1px solid rgba(255,255,255,0.1);
+          "
+        >
       </div>
 
-      <input
-        id="edit-value"
-        type="number"
-        value="${card.customValue}"
-        class="btn btn-secondary"
-      >
-
-      <div style="height:24px"></div>
-
-      <div style="height:280px">
+      <div style="height:260px;margin-bottom:2rem">
         <canvas id="cardTrendChart"></canvas>
       </div>
 
-      <div style="height:20px"></div>
-
-      <button class="btn btn-primary" onclick="saveCardEdits(${card.id})">
+      <button
+        class="btn btn-primary"
+        onclick="saveCardEdits(${card.id})"
+      >
         Save Changes
       </button>
 
@@ -661,48 +424,39 @@ function openCardDetails(id) {
   document.getElementById('edit-grade').value =
     card.customGrade;
 
-  renderCardTrendChart(card);
+  setTimeout(() => {
+    renderCardTrend(card);
+  }, 100);
 }
 
-// ─────────────────────────────────────────────
-// CLOSE MODAL
-// ─────────────────────────────────────────────
-
 function closeCardDetails() {
-
-  const modal = document.getElementById(
-    'card-detail-modal'
-  );
+  const modal =
+    document.getElementById('card-detail-modal');
 
   if (modal) modal.remove();
 }
 
-// ─────────────────────────────────────────────
-// SAVE CARD EDITS
-// ─────────────────────────────────────────────
-
 function saveCardEdits(id) {
 
-  const card = collection.find(c => c.id === id);
+  const card =
+    collection.find(c => c.id === id);
 
   if (!card) return;
 
   card.customGrade =
     document.getElementById('edit-grade').value;
 
-  card.customValue = Number(
-    document.getElementById('edit-value').value || 0
-  );
+  card.customValue =
+    Number(
+      document.getElementById('edit-value').value || 0
+    );
 
   card.priceHistory.push({
     date: new Date().toLocaleDateString(),
     value: card.customValue
   });
 
-  localStorage.setItem(
-    'pokelens_collection',
-    JSON.stringify(collection)
-  );
+  saveCollection();
 
   updatePortfolioHistory();
 
@@ -711,57 +465,58 @@ function saveCardEdits(id) {
   renderCollection();
 }
 
-// ─────────────────────────────────────────────
-// CARD TREND CHART
-// ─────────────────────────────────────────────
+function renderCardTrend(card) {
 
-function renderCardTrendChart(card) {
-
-  const canvas = document.getElementById(
-    'cardTrendChart'
-  );
+  const canvas =
+    document.getElementById('cardTrendChart');
 
   if (!canvas) return;
 
   new Chart(canvas, {
+
     type: 'line',
+
     data: {
-      labels: card.priceHistory.map(p => p.date),
+      labels:
+        card.priceHistory.map(p => p.date),
+
       datasets: [{
         label: card.name,
-        data: card.priceHistory.map(p => p.value),
-        tension: 0.35
+
+        data:
+          card.priceHistory.map(p => p.value),
+
+        tension: 0.3
       }]
+    },
+
+    options: {
+      responsive: true,
+
+      scales: {
+        x: {
+          ticks: {
+            color: '#ffffff'
+          }
+        },
+
+        y: {
+          ticks: {
+            color: '#ffffff'
+          }
+        }
+      },
+
+      plugins: {
+        legend: {
+          labels: {
+            color: '#ffffff'
+          }
+        }
+      }
     }
   });
 }
 
-// ─────────────────────────────────────────────
-// HELPERS
-// ─────────────────────────────────────────────
-
-function updateCollectionCount() {
-
-  const el = document.getElementById(
-    'collection-count'
-  );
-
-  if (el) {
-    el.textContent = collection.length
-      ? `(${collection.length})`
-      : '';
-  }
-}
-
-function resetApp() {
-
-  state = {
-    mode: 'idle',
-    imageSrc: null,
-    result: null,
-    error: null
-  };
-
-  render();
-}
+updateCollectionCount();
 </script>
